@@ -1,0 +1,257 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Trip Analysis - {{ data_file.original_filename }}{% endblock %}
+
+{% block content %}
+<h2>Trip Type Analysis</h2>
+<p class="text-muted">
+    File: <strong>{{ data_file.original_filename }}</strong>
+</p>
+
+<!-- Technician Filter -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Filter by Technician</h6>
+    </div>
+    <div class="card-body">
+        <form id="technicianFilterForm" method="get">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    {{ form.technician.label_tag }}
+                    {{ form.technician }}
+                </div>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-filter me-2"></i> Apply Filter
+                    </button>
+                    {% if technician %}
+                    <a href="{% url 'trip_analysis' data_file.id %}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-times me-2"></i> Clear
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Trip Type Distribution -->
+<div class="row">
+    <div class="col-xl-8 col-lg-7">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Trip Type Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div id="tripTypeChart" style="height: 400px;"></div>
+                <div class="loading-spinner text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Trip Type Summary -->
+    <div class="col-xl-4 col-lg-5">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Trip Type Summary</h6>
+            </div>
+            <div class="card-body">
+                <div id="tripTypeSummary">
+                    <div class="loading-spinner text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Punch-in Analysis -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Punch-in Distribution by Hour</h6>
+            </div>
+            <div class="card-body">
+                <div id="punchInChart" style="height: 400px;"></div>
+                <div class="loading-spinner text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // Set up CSRF token for AJAX requests
+    const csrftoken = $("[name=csrfmiddlewaretoken]").val();
+    $.ajaxSetup({
+        headers: { "X-CSRFToken": csrftoken }
+    });
+    
+    const fileId = "{{ data_file.id }}";
+    const technicianId = "{{ technician.id|default:'null' }}";
+    const technician = technicianId !== "null" ? technicianId : null;
+    
+    // Load trip type chart
+    loadTripTypeChart();
+    
+    // Load trip type summary
+    loadTripTypeSummary();
+    
+    // Load punch-in chart
+    loadPunchInChart();
+    
+    function loadTripTypeChart() {
+        $('#tripTypeChart').siblings('.loading-spinner').removeClass('d-none');
+        
+        $.ajax({
+            url: `/data/${fileId}/trips/chart/`,
+            data: technician ? { technician } : {},
+            success: function(data) {
+                const chartData = [{
+                    x: data.labels,
+                    y: data.datasets[0].data,
+                    type: 'bar',
+                    marker: {
+                        color: data.datasets[0].backgroundColor
+                    },
+                    text: data.datasets[0].data.map(String),
+                    textposition: 'auto'
+                }];
+                
+                const layout = {
+                    title: 'Trip Type Distribution',
+                    xaxis: {
+                        title: 'Trip Type'
+                    },
+                    yaxis: {
+                        title: 'Count'
+                    },
+                    margin: { t: 50, b: 100 }
+                };
+                
+                Plotly.newPlot('tripTypeChart', chartData, layout);
+                $('#tripTypeChart').siblings('.loading-spinner').addClass('d-none');
+            },
+            error: function() {
+                $('#tripTypeChart').html('<div class="alert alert-danger">Error loading chart data</div>');
+                $('#tripTypeChart').siblings('.loading-spinner').addClass('d-none');
+            }
+        });
+    }
+    
+    function loadTripTypeSummary() {
+        $('#tripTypeSummary').html(`
+            <div class="loading-spinner text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `);
+        
+        $.ajax({
+            url: `/data/${fileId}/trips/summary/`,
+            data: technician ? { technician } : {},
+            success: function(data) {
+                let html = `
+                    <p>Total Records: <strong>${data.total_count}</strong></p>
+                    <h6 class="font-weight-bold">Trip Type Breakdown:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Trip Type</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.trip_types.forEach(type => {
+                    html += `
+                        <tr>
+                            <td>${type.trip_type}</td>
+                            <td>${type.count}</td>
+                            <td>${type.percentage.toFixed(2)}%</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                // Add note about punch-in/out records
+                if (data.has_punch_records) {
+                    html += `
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle me-2"></i> This dataset includes punch-in/out records.
+                            See the punch-in time distribution chart below.
+                        </div>
+                    `;
+                }
+                
+                $('#tripTypeSummary').html(html);
+            },
+            error: function() {
+                $('#tripTypeSummary').html('<div class="alert alert-danger">Error loading summary data</div>');
+            }
+        });
+    }
+    
+    function loadPunchInChart() {
+        $('#punchInChart').siblings('.loading-spinner').removeClass('d-none');
+        
+        $.ajax({
+            url: `/data/${fileId}/trips/punch-in-chart/`,
+            data: technician ? { technician } : {},
+            success: function(data) {
+                const chartData = [{
+                    x: data.labels,
+                    y: data.datasets[0].data,
+                    type: 'bar',
+                    marker: {
+                        color: data.datasets[0].backgroundColor
+                    }
+                }];
+                
+                const layout = {
+                    title: 'Punch-in Distribution by Hour of Day',
+                    xaxis: {
+                        title: 'Hour of Day'
+                    },
+                    yaxis: {
+                        title: 'Number of Punch-ins'
+                    },
+                    margin: { t: 50, b: 100 }
+                };
+                
+                Plotly.newPlot('punchInChart', chartData, layout);
+                $('#punchInChart').siblings('.loading-spinner').addClass('d-none');
+            },
+            error: function() {
+                $('#punchInChart').html('<div class="alert alert-danger">Error loading chart data</div>');
+                $('#punchInChart').siblings('.loading-spinner').addClass('d-none');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

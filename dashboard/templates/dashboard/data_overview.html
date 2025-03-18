@@ -1,0 +1,236 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Data Overview - {{ data_file.original_filename }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-7">
+        <h2>Data Overview</h2>
+        <p class="text-muted">
+            File: <strong>{{ data_file.original_filename }}</strong> 
+            <small class="text-muted">(Uploaded: {{ data_file.upload_date|date:"M d, Y H:i" }})</small>
+        </p>
+    </div>
+    <div class="col-md-5 text-end">
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteFileModal">
+            <i class="fas fa-trash-alt me-2"></i> Delete File
+        </button>
+    </div>
+</div>
+
+<!-- Summary Statistics -->
+<div class="row">
+    <!-- Record Count -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-primary shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">Total Records</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.record_count }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-database fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Technician Count -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-success shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">Technicians</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.technician_count }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-users fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Duplicate Records -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-warning shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">Duplicate Records</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">{{ stats.duplicate_count }}</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-copy fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Date Range -->
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card border-left-info shadow h-100 py-2">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">Date Range</div>
+                        <div class="h6 mb-0 font-weight-bold text-gray-800">
+                            {% if stats.date_range %}
+                            {{ stats.date_range.start }} - {{ stats.date_range.end }}
+                            {% else %}
+                            No dates available
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Trip Type Distribution -->
+{% if stats.trip_types %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Trip Type Distribution</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Trip Type</th>
+                                <th>Count</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for trip_type in stats.trip_types %}
+                            <tr>
+                                <td>{{ trip_type.trip_type }}</td>
+                                <td>{{ trip_type.count }}</td>
+                                <td>{{ trip_type.percentage|floatformat:2 }}%</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Sample Data Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Sample Data (First 10 Records)</h6>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-hover">
+                        <thead>
+                            <tr>
+                                {% for column in columns %}
+                                <th>{{ column }}</th>
+                                {% endfor %}
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for record in sample_data %}
+                            <tr>
+                                <td>{{ record.id }}</td>
+                                <td>{{ record.technician }}</td>
+                                <td>{{ record.trip_type }}</td>
+                                <td>{{ record.created_at }}</td>
+                                <td>{{ record.location }}</td>
+                                <td>{{ record.latitude }}</td>
+                                <td>{{ record.longitude }}</td>
+                                <td>{{ record.duplicate }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="text-muted">
+                    Note: Showing only the first 10 records. The full dataset contains {{ stats.record_count }} records.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Links -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Continue Analysis</h6>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'duplicate_analysis' data_file.id %}" class="btn btn-primary btn-block w-100">
+                            <i class="fas fa-search me-2"></i> Duplicate Analysis
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'trip_analysis' data_file.id %}" class="btn btn-success btn-block w-100">
+                            <i class="fas fa-chart-bar me-2"></i> Trip Analysis
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'technician_logs' data_file.id %}" class="btn btn-info btn-block w-100">
+                            <i class="fas fa-user-clock me-2"></i> Technician Logs
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'distance_analysis' data_file.id %}" class="btn btn-warning btn-block w-100">
+                            <i class="fas fa-route me-2"></i> Distance Analysis
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{% url 'report_generation' data_file.id %}" class="btn btn-danger btn-block w-100">
+                            <i class="fas fa-file-pdf me-2"></i> Generate Reports
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete File Modal -->
+<div class="modal fade" id="deleteFileModal" tabindex="-1" aria-labelledby="deleteFileModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteFileModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the file <strong>{{ data_file.original_filename }}</strong>?</p>
+                <p class="text-danger">This will permanently delete all associated data and cannot be undone!</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{% url 'delete_file' data_file.id %}" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Delete File</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

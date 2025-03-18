@@ -1,0 +1,304 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Technician Logs - {{ data_file.original_filename }}{% endblock %}
+
+{% block content %}
+<h2>Technician Time Logs</h2>
+<p class="text-muted">
+    File: <strong>{{ data_file.original_filename }}</strong>
+</p>
+
+<!-- Technician Selection -->
+<div class="card shadow mb-4">
+    <div class="card-header py-3">
+        <h6 class="m-0 font-weight-bold text-primary">Select Technician</h6>
+    </div>
+    <div class="card-body">
+        <form id="technicianFilterForm" method="get">
+            <div class="row align-items-center">
+                <div class="col-md-4">
+                    {{ form.technician.label_tag }}
+                    {{ form.technician }}
+                </div>
+                <div class="col-md-4 mt-3 mt-md-0">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-user me-2"></i> View Technician
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if technician %}
+<!-- Technician Summary -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Technician {{ technician.technician_id }} Summary</h6>
+            </div>
+            <div class="card-body">
+                <div id="technicianSummary">
+                    <div class="loading-spinner text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Punch In/Out Records -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Punch-in/Punch-out Records</h6>
+            </div>
+            <div class="card-body">
+                <div id="punchInOutRecords">
+                    <div class="loading-spinner text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Timeline Chart -->
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Activity Timeline</h6>
+            </div>
+            <div class="card-body">
+                <div id="activityTimeline" style="height: 500px;"></div>
+                <div class="loading-spinner text-center d-none">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<div class="alert alert-info">
+    <i class="fas fa-info-circle me-2"></i> Please select a technician to view their logs.
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+{% if technician %}
+<script>
+$(document).ready(function() {
+    // Set up CSRF token for AJAX requests
+    const csrftoken = $("[name=csrfmiddlewaretoken]").val();
+    $.ajaxSetup({
+        headers: { "X-CSRFToken": csrftoken }
+    });
+    
+    const fileId = "{{ data_file.id }}";
+    const technicianId = "{{ technician.id }}";
+    
+    // Load technician summary
+    loadTechnicianSummary();
+    
+    // Load punch in/out records
+    loadPunchInOutRecords();
+    
+    // Load activity timeline
+    loadActivityTimeline();
+    
+    function loadTechnicianSummary() {
+        $.ajax({
+            url: `/data/${fileId}/technicians/${technicianId}/summary/`,
+            success: function(data) {
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>Technician ID:</strong> ${data.technician_id}</p>
+                            <p><strong>Total Records:</strong> ${data.total_records}</p>
+                            ${data.date_range ? 
+                              `<p><strong>Date Range:</strong> ${data.date_range.start} to ${data.date_range.end}</p>` : 
+                              ''}
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Punch-in Records:</strong> ${data.punch_in_count}</p>
+                            <p><strong>Punch-out Records:</strong> ${data.punch_out_count}</p>
+                        </div>
+                    </div>
+                    
+                    <h6 class="font-weight-bold mt-3">Trip Type Breakdown:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Trip Type</th>
+                                    <th>Count</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+                
+                data.trip_types.forEach(type => {
+                    html += `
+                        <tr>
+                            <td>${type.trip_type}</td>
+                            <td>${type.count}</td>
+                        </tr>
+                    `;
+                });
+                
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+                
+                $('#technicianSummary').html(html);
+            },
+            error: function() {
+                $('#technicianSummary').html('<div class="alert alert-danger">Error loading technician summary</div>');
+            }
+        });
+    }
+    
+    function loadPunchInOutRecords() {
+        $.ajax({
+            url: `/data/${fileId}/technicians/${technicianId}/punch-data/`,
+            success: function(data) {
+                if (data.daily_records && data.daily_records.length > 0) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Punch-in Times</th>
+                                        <th>Punch-out Times</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    data.daily_records.forEach(record => {
+                        html += `
+                            <tr>
+                                <td>${record.date}</td>
+                                <td>${record.punch_in_times.length > 0 ? record.punch_in_times.join(', ') : 'N/A'}</td>
+                                <td>${record.punch_out_times.length > 0 ? record.punch_out_times.join(', ') : 'N/A'}</td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                    $('#punchInOutRecords').html(html);
+                } else {
+                    $('#punchInOutRecords').html('<div class="alert alert-info">No punch-in/out records found for this technician.</div>');
+                }
+            },
+            error: function() {
+                $('#punchInOutRecords').html('<div class="alert alert-danger">Error loading punch-in/out records</div>');
+            }
+        });
+    }
+    
+    function loadActivityTimeline() {
+        $('#activityTimeline').siblings('.loading-spinner').removeClass('d-none');
+        
+        $.ajax({
+            url: `/data/${fileId}/technicians/${technicianId}/timeline/`,
+            success: function(data) {
+                if (data.timeline_data && data.timeline_data.length > 0) {
+                    // Group data by trip type for the chart
+                    const tripTypes = data.trip_types;
+                    const traces = {};
+                    
+                    // Create a trace for each trip type
+                    tripTypes.forEach(type => {
+                        traces[type] = {
+                            x: [],
+                            y: [],
+                            text: [],
+                            type: 'scatter',
+                            mode: 'markers',
+                            name: type
+                        };
+                    });
+                    
+                    // Add a trace for the connecting line
+                    const lineTrace = {
+                        x: [],
+                        y: [],
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: {
+                            color: 'gray',
+                            width: 1
+                        },
+                        showlegend: false
+                    };
+                    
+                    // Fill the traces with data
+                    data.timeline_data.forEach(event => {
+                        const trace = traces[event.trip_type];
+                        trace.x.push(event.created_at);
+                        trace.y.push(event.trip_type);
+                        trace.text.push(`Location: ${event.location}<br>Time: ${event.created_at}${event.coordinates ? `<br>Coordinates: ${event.coordinates}` : ''}`);
+                        
+                        // Add to the line trace
+                        lineTrace.x.push(event.created_at);
+                        lineTrace.y.push(event.trip_type);
+                    });
+                    
+                    // Convert traces object to array
+                    const plotData = Object.values(traces);
+                    
+                    // Add the line trace
+                    plotData.push(lineTrace);
+                    
+                    const layout = {
+                        title: `Activity Timeline for Technician ${data.timeline_data[0].technician_id}`,
+                        xaxis: {
+                            title: 'Date and Time'
+                        },
+                        yaxis: {
+                            title: 'Trip Type'
+                        },
+                        hovermode: 'closest',
+                        margin: { t: 50, b: 100 }
+                    };
+                    
+                    Plotly.newPlot('activityTimeline', plotData, layout);
+                } else {
+                    $('#activityTimeline').html('<div class="alert alert-info">No timeline data available for this technician.</div>');
+                }
+                
+                $('#activityTimeline').siblings('.loading-spinner').addClass('d-none');
+            },
+            error: function() {
+                $('#activityTimeline').html('<div class="alert alert-danger">Error loading timeline data</div>');
+                $('#activityTimeline').siblings('.loading-spinner').addClass('d-none');
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+{% endblock %}
