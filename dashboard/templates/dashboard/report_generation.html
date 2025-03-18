@@ -1,0 +1,254 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Report Generation - {{ data_file.original_filename }}{% endblock %}
+
+{% block content %}
+<h2>Report Generation</h2>
+<p class="text-muted">
+    File: <strong>{{ data_file.original_filename }}</strong>
+</p>
+
+<!-- Generate Report Card -->
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Generate New Report</h6>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{% url 'generate_report' data_file.id %}">
+                    {% csrf_token %}
+                    
+                    <div class="mb-3">
+                        {{ form.technician.label_tag }}
+                        {{ form.technician }}
+                        {% if form.technician.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.technician.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Report Format:</label>
+                        <div class="btn-group" role="group">
+                            {% for radio in form.report_type %}
+                            <div class="form-check form-check-inline">
+                                {{ radio.tag }}
+                                <label class="form-check-label" for="{{ radio.id_for_label }}">
+                                    {{ radio.choice_label }}
+                                </label>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% if form.report_type.errors %}
+                        <div class="invalid-feedback d-block">
+                            {{ form.report_type.errors }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-file-pdf me-2"></i> Generate Report
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Report Tips -->
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Report Tips</h6>
+            </div>
+            <div class="card-body">
+                <ul>
+                    <li><strong>PDF Format:</strong> Best for printing and sharing. Requires PDF libraries to be installed on the server.</li>
+                    <li><strong>HTML Format:</strong> Always available and includes all visualizations.</li>
+                    <li>Reports include trip type statistics, punch-in/out analysis, and distance data.</li>
+                    <li>For PDF generation, make sure <code>pdfkit</code>, <code>weasyprint</code>, or <code>reportlab</code> is installed.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Reports -->
+    <div class="col-lg-6">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Reports</h6>
+                <a href="#" class="btn btn-sm btn-primary" id="refreshReportsList">
+                    <i class="fas fa-sync-alt"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                <div id="recentReports">
+                    {% if recent_reports %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Technician</th>
+                                    <th>Type</th>
+                                    <th>Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for report in recent_reports %}
+                                <tr>
+                                    <td>Technician {{ report.technician.technician_id }}</td>
+                                    <td>
+                                        <span class="badge {% if report.report_type == 'pdf' %}bg-danger{% else %}bg-primary{% endif %}">
+                                            {{ report.report_type|upper }}
+                                        </span>
+                                    </td>
+                                    <td>{{ report.created_at|date:"M d, Y H:i" }}</td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'view_report' report.id %}" class="btn btn-info" target="_blank">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'download_report' report.id %}" class="btn btn-success">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-danger delete-report" data-report-id="{{ report.id }}">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        No reports have been generated yet.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Report Modal -->
+<div class="modal fade" id="deleteReportModal" tabindex="-1" aria-labelledby="deleteReportModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteReportModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this report?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteReportForm" method="post">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Delete Report</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    const fileId = "{{ data_file.id }}";
+
+    // Set up CSRF token for AJAX requests
+    const csrftoken = $("[name=csrfmiddlewaretoken]").val();
+    $.ajaxSetup({
+        headers: { "X-CSRFToken": csrftoken }
+    });
+    
+    // Delete report modal
+    $('.delete-report').on('click', function() {
+        const reportId = $(this).data('report-id');
+        $('#deleteReportForm').attr('action', `/reports/${reportId}/delete/`);
+        $('#deleteReportModal').modal('show');
+    });
+    
+    // Refresh reports list
+    $('#refreshReportsList').on('click', function(e) {
+        e.preventDefault();
+        refreshReportsList();
+    });
+    
+    function refreshReportsList() {
+        $.ajax({
+            url: `/data/${fileId}/reports/list/`,
+            success: function(data) {
+                if (data.reports && data.reports.length > 0) {
+                    let html = `
+                        <div class="table-responsive">
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Technician</th>
+                                        <th>Type</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                    `;
+                    
+                    data.reports.forEach(report => {
+                        html += `
+                            <tr>
+                                <td>Technician ${report.technician_id}</td>
+                                <td>
+                                    <span class="badge ${report.report_type === 'pdf' ? 'bg-danger' : 'bg-primary'}">
+                                        ${report.report_type.toUpperCase()}
+                                    </span>
+                                </td>
+                                <td>${report.created_at}</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <a href="/reports/${report.id}/view/" class="btn btn-info" target="_blank">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="/reports/${report.id}/download/" class="btn btn-success">
+                                            <i class="fas fa-download"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-danger delete-report" data-report-id="${report.id}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    
+                    html += `
+                                </tbody>
+                            </table>
+                        </div>
+                    `;
+                    
+                    $('#recentReports').html(html);
+                    
+                    // Rebind delete report buttons
+                    $('.delete-report').on('click', function() {
+                        const reportId = $(this).data('report-id');
+                        $('#deleteReportForm').attr('action', `/reports/${reportId}/delete/`);
+                        $('#deleteReportModal').modal('show');
+                    });
+                } else {
+                    $('#recentReports').html('<div class="alert alert-info">No reports have been generated yet.</div>');
+                }
+            },
+            error: function() {
+                $('#recentReports').html('<div class="alert alert-danger">Error loading reports list</div>');
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

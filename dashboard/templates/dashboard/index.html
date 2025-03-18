@@ -1,0 +1,90 @@
+{% extends 'dashboard/base.html' %}
+
+{% block title %}Technician Trip Analyzer - Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+                <h6 class="m-0 font-weight-bold text-primary">Welcome to Technician Trip Analyzer</h6>
+            </div>
+            <div class="card-body">
+                <p>This application allows you to analyze technician trip data from Excel files. Upload an Excel file to begin analysis.</p>
+                
+                <div class="upload-section my-4 p-4 border rounded bg-light">
+                    <h5 class="mb-3">Upload Excel File</h5>
+                    <form method="post" action="{% url 'upload_file' %}" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            {{ form.file.label_tag }}
+                            {{ form.file }}
+                            {% if form.file.errors %}
+                            <div class="text-danger">
+                                {{ form.file.errors }}
+                            </div>
+                            {% endif %}
+                            <div class="form-text">Only Excel files (.xlsx) are supported.</div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-upload me-2"></i> Upload and Process
+                        </button>
+                    </form>
+                </div>
+                
+                {% if latest_file %}
+                <div class="mt-4">
+                    <h5>Continue with latest file:</h5>
+                    <a href="{% url 'data_overview' latest_file.id %}" class="btn btn-success">
+                        <i class="fas fa-chart-bar me-2"></i> {{ latest_file.original_filename }}
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Recent Files</h6>
+            </div>
+            <div class="card-body">
+                {% if data_files %}
+                <div class="list-group">
+                    {% for file in data_files %}
+                    <a href="{% url 'data_overview' file.id %}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                        <div>
+                            <i class="fas fa-file-excel me-2 text-success"></i>
+                            {{ file.original_filename }}
+                            <small class="d-block text-muted">Uploaded: {{ file.upload_date|date:"M d, Y" }}</small>
+                        </div>
+                        <span class="badge bg-primary rounded-pill">{{ file.record_count }}</span>
+                    </a>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <p class="text-center">No files uploaded yet.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card shadow mb-4">
+            <div class="card-header py-3">
+                <h6 class="m-0 font-weight-bold text-primary">Getting Started</h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="mb-2"><i class="fas fa-upload me-2 text-primary"></i> Upload an Excel file</li>
+                    <li class="mb-2"><i class="fas fa-table me-2 text-primary"></i> Review the data overview</li>
+                    <li class="mb-2"><i class="fas fa-search me-2 text-primary"></i> Analyze duplicate records</li>
+                    <li class="mb-2"><i class="fas fa-chart-bar me-2 text-primary"></i> Explore trip type statistics</li>
+                    <li class="mb-2"><i class="fas fa-user-clock me-2 text-primary"></i> View technician time logs</li>
+                    <li class="mb-2"><i class="fas fa-route me-2 text-primary"></i> Analyze travel distances</li>
+                    <li><i class="fas fa-file-pdf me-2 text-primary"></i> Generate detailed reports</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
